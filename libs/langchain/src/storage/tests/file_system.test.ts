@@ -32,6 +32,35 @@ describe("LocalFileStore", () => {
     ]);
   });
 
+  test("LocalFileStore uses last value for duplicate keys in mset", async () => {
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const store = await LocalFileStore.fromPath(tempDir);
+    const key = "duplicate-key";
+    await store.mset([
+      [key, encoder.encode("first")],
+      [key, encoder.encode("second")],
+    ]);
+    const [value] = await store.mget([key]);
+    expect(value).toBeDefined();
+    expect(decoder.decode(value!)).toBe("second");
+    await store.mdelete([key]);
+  });
+
+  test("LocalFileStore serializes concurrent writes to the same key", async () => {
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const store = await LocalFileStore.fromPath(tempDir);
+    const key = "concurrent-key";
+    const firstPromise = store.mset([[key, encoder.encode("first")]]);
+    const secondPromise = store.mset([[key, encoder.encode("second")]]);
+    await Promise.all([firstPromise, secondPromise]);
+    const [value] = await store.mget([key]);
+    expect(value).toBeDefined();
+    expect(decoder.decode(value!)).toBe("second");
+    await store.mdelete([key]);
+  });
+
   test("LocalFileStore can delete values", async () => {
     const encoder = new TextEncoder();
     const store = await LocalFileStore.fromPath(tempDir);
